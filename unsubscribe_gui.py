@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QHeaderView, QProgressBar, QLineEdit, QLabel, QHBoxLayout, QCheckBox, QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal, QObject
-from PyQt5.QtGui import QIntValidator
 from email_scraper import get_gmail_service, extract_senders_and_unsubscribe, get_unsubscribe_link
 
 class ProgressEmitter(QObject):
@@ -33,8 +32,8 @@ class UnsubscribeList(QMainWindow):
         
         self.tableWidget = QTableWidget()
         self.tableWidget.setRowCount(0)
-        self.tableWidget.setColumnCount(4)
-        self.tableWidget.setHorizontalHeaderLabels(['Sender', 'Unsubscribe', 'Use Gmail unsubscribe', 'Move to Trash'])
+        self.tableWidget.setColumnCount(3)
+        self.tableWidget.setHorizontalHeaderLabels(['Sender', 'Unsubscribe', 'Use Gmail unsubscribe'])
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         
         self.progress_bar = QProgressBar(self)
@@ -65,9 +64,9 @@ class UnsubscribeList(QMainWindow):
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-        self.number_input.setValidator(QIntValidator(0, self.update_total_emails()))
 
     def scrape_emails(self):
+        print("Scraping emails")
         if self.scraping_thread and self.scraping_thread.is_alive():
             # Set a flag to indicate that scraping should be cancelled
             self.should_cancel_scraping = True
@@ -89,8 +88,14 @@ class UnsubscribeList(QMainWindow):
         self.scraping_thread.start()
 
     def start_scraping(self, number_of_messages, include_labels):
+        total = self.update_total_emails()
+        if int(self.number_input.text()) > total:
+            self.number_input.setText(str(total))
+            number_of_messages = total
+
         def progress_callback(current, total):
             self.progress_emitter.progress_updated.emit(current, total)
+            print(f"{current} / {total}")
 
         def scraping_done(domain_unsubscribe_links, domain_header_unsubscribe_links):
             self.progress_emitter.scraping_completed.emit(domain_unsubscribe_links, domain_header_unsubscribe_links)
@@ -150,27 +155,16 @@ class UnsubscribeList(QMainWindow):
             self.tableWidget.insertRow(row_position)
             self.tableWidget.setItem(row_position, 0, QTableWidgetItem(domain))
 
-            link_btn = QPushButton('Opt-Out' if link else 'No Link')
+            link_btn = QPushButton('Opt-Out via link' if link else 'No Link')
             link_btn.clicked.connect(lambda _, link=link: webbrowser.open(link) if link else None)
             link_btn.setEnabled(bool(link))
             self.tableWidget.setCellWidget(row_position, 1, link_btn)
 
             header_link = header_unsubscribe_links.get(domain, "")
-            header_link_btn = QPushButton('Use Gmail Unsubscribe' if header_link else 'No Link')
+            header_link_btn = QPushButton('Opt-out through Gmail' if header_link else 'No Link')
             header_link_btn.clicked.connect(lambda _, link=header_link: webbrowser.open(link) if link else None)
             header_link_btn.setEnabled(bool(header_link))
             self.tableWidget.setCellWidget(row_position, 2, header_link_btn)
-
-            service = get_gmail_service()
-            query = f"from:{domain} in:trash"
-            messages = service.users().messages().list(userId='me', q=query).execute()
-            trash_btn = QPushButton('Move to Trash')
-            trash_btn.setEnabled(True)  # Enable the button by default
-            if 'messages' in messages and messages['messages']:
-                trash_btn.setEnabled(False)  # Disable the button if there are messages in trash
-            else:
-                trash_btn.clicked.connect(lambda _, domain=domain: self.move_to_trash(domain))
-            self.tableWidget.setCellWidget(row_position, 3, trash_btn)
 
         header = self.tableWidget.horizontalHeader()
         for column in range(self.tableWidget.columnCount()):
@@ -185,21 +179,6 @@ class UnsubscribeList(QMainWindow):
             self.estimated_time_label.setText(f"Estimated processing time: {estimated_time:.2f} seconds.")
         except Exception as e:
             self.estimated_time_label.setText("Estimated processing time: N/A")
-
-    def move_to_trash(self, domain):
-        service = get_gmail_service()
-        query = f"from:{domain}"
-        try:
-            messages = service.users().messages().list(userId='me', q=query).execute()
-            if 'messages' in messages:
-                for message in messages['messages']:
-                    service.users().messages().trash(userId='me', id=message['id']).execute()
-                QMessageBox.information(self, "Success", f"All emails from {domain} moved to Trash.")
-                self.update_table(self.unsubscribe_data, {})
-            else:
-                QMessageBox.information(self, "Info", f"No emails found from {domain}.")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"An error occurred: {str(e)}")
 
 def main():
     app = QApplication(sys.argv)
