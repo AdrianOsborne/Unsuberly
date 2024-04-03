@@ -45,4 +45,4 @@ In today's digital age, email inboxes are flooded with marketing emails, often c
 - This project is developed by Adrian Osborne.
 
 ## License
-This project is licensed under the [Open Source License](LICENSE).
+This project is licensed under the [Open Source License](license.md).
