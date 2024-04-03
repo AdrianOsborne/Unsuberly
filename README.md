@@ -14,7 +14,10 @@ In today's digital age, email inboxes are flooded with marketing emails, often c
 
 ## How to Install and Run the Project
 1. **Get Google Credentials**:
-   - Obtain your own Google credentials to access Gmail's API by following the instructions provided in the [Google API Console](https://console.developers.google.com/).
+   - Go to the [Google API Console](https://console.developers.google.com/) and create a new project.
+   - Enable the Gmail API for your project.
+   - Go to the "Credentials" tab and create credentials (OAuth 2.0 client ID) for a desktop application.
+   - Download the credentials file (`credentials.json`) and place it in the project directory.
 
 2. **Install Dependencies**:
    - Install the required Python dependencies by running:
