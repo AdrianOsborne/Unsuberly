@@ -7,7 +7,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from urllib.parse import unquote, quote_plus
+from urllib.parse import unquote
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
@@ -35,14 +35,17 @@ def find_message_body(parts):
     return ""
 
 def get_unsubscribe_link(msg_str):
+    unsubscribe_phrases = ['unsubscribe', 'preferences', 'opt-out']
     links = re.findall(r'(https?://[^\s]+)', msg_str)
-    return [link for link in links if 'unsubscribe' in unquote(link).lower()]
+    unsubscribe_links = {link.split('//')[1].split('/')[0]: link for link in links if any(phrase in unquote(link).lower() for phrase in unsubscribe_phrases)}
+    return unsubscribe_links
 
 def find_unsubscribe_link_in_headers(headers):
-    unsubscribe_header = next((header for header in headers if header['name'].lower() == 'list-unsubscribe'), None)
-    if unsubscribe_header:
-        links = re.findall(r'<(http[s]?://[^\s]+)>', unsubscribe_header['value'])
-        return links[0] if links else None
+    for header in headers:
+        if header['name'].lower() == 'list-unsubscribe':
+            unsubscribe_links = re.findall(r'<(http[s]?://[^\s]+)>', header['value'])
+            if unsubscribe_links:
+                return unsubscribe_links[0]
     return None
 
 def extract_senders_and_unsubscribe(service, process_count, user_id='me', progress_callback=None, include_labels=None, done_callback=None):
@@ -80,8 +83,11 @@ def extract_senders_and_unsubscribe(service, process_count, user_id='me', progre
                 sender_email = next((header['value'] for header in headers if header['name'].lower() == 'from'), 'Unknown Sender')
                 domain = sender_email.split('@')[-1].lower()
                 
-                if body_unsubscribe_link:
-                    domain_unsubscribe_links[domain] = body_unsubscribe_link[0]
+                if isinstance(body_unsubscribe_link, list):
+                    domain_unsubscribe_links[domain] = body_unsubscribe_link[0] if body_unsubscribe_link else None
+                elif isinstance(body_unsubscribe_link, dict):
+                    domain_unsubscribe_links[domain] = next(iter(body_unsubscribe_link.values())) if body_unsubscribe_link else None
+                
                 if header_unsubscribe_link:
                     domain_header_unsubscribe_links[domain] = header_unsubscribe_link
 
@@ -98,12 +104,11 @@ def extract_senders_and_unsubscribe(service, process_count, user_id='me', progre
     end_time = time.time()
     
     if done_callback:
-        done_callback(processed_messages, end_time - start_time)
+        done_callback(domain_unsubscribe_links, domain_header_unsubscribe_links)
 
-def main(process_count, progress_callback=None, done_callback=None):
+    return domain_unsubscribe_links, domain_header_unsubscribe_links
+
+if __name__ == "__main__":
+    # Testing standalone
     service = get_gmail_service()
-    extract_senders_and_unsubscribe(service, process_count, progress_callback=progress_callback, done_callback=done_callback)
-
-if __name__ == '__main__':
-    process_count = 100  # Example process count
-    main(process_count)
+    extract_senders_and_unsubscribe(service, 100, done_callback=lambda x, y: print(x, y))
