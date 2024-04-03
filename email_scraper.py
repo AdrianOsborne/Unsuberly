@@ -1,3 +1,5 @@
+# email_scraper.py
+
 import re
 import os
 import base64
@@ -48,7 +50,7 @@ def find_unsubscribe_link_in_headers(headers):
                 return unsubscribe_links[0]
     return None
 
-def extract_senders_and_unsubscribe(service, process_count, user_id='me', progress_callback=None, include_labels=None, done_callback=None):
+def extract_senders_and_unsubscribe(service, process_count, user_id='me', progress_callback=None, include_labels=None, done_callback=None, cancel_flag=False):  # Added cancel_flag parameter
     start_time = time.time()
 
     if include_labels is None:
@@ -60,7 +62,7 @@ def extract_senders_and_unsubscribe(service, process_count, user_id='me', progre
     
     for label_id in include_labels:
         next_page_token = None
-        while processed_messages < process_count:
+        while processed_messages < process_count and not cancel_flag:  # Check cancel_flag
             try:
                 response = service.users().messages().list(userId=user_id, labelIds=[label_id], maxResults=100, pageToken=next_page_token, includeSpamTrash=True).execute()
             except HttpError as error:
@@ -107,8 +109,3 @@ def extract_senders_and_unsubscribe(service, process_count, user_id='me', progre
         done_callback(domain_unsubscribe_links, domain_header_unsubscribe_links)
 
     return domain_unsubscribe_links, domain_header_unsubscribe_links
-
-if __name__ == "__main__":
-    # Testing standalone
-    service = get_gmail_service()
-    extract_senders_and_unsubscribe(service, 100, done_callback=lambda x, y: print(x, y))
