@@ -13,7 +13,7 @@ from urllib.parse import unquote
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
-def get_gmail_service():
+def get_gmail_service(SCOPES):
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -21,7 +21,19 @@ def get_gmail_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            # Construct credentials from environment variables
+            client_config = {
+                "installed": {
+                    "client_id": os.environ["CLIENT_ID"],
+                    "project_id": os.environ["PROJECT_ID"],
+                    "auth_uri": os.environ["AUTH_URI"],
+                    "token_uri": os.environ["TOKEN_URI"],
+                    "auth_provider_x509_cert_url": os.environ["AUTH_PROVIDER_X509_CERT_URL"],
+                    "client_secret": os.environ["CLIENT_SECRET"],
+                    "redirect_uris": [os.environ["REDIRECT_URIS"]],
+                }
+            }
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
